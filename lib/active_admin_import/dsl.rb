@@ -62,12 +62,37 @@ module ActiveAdminImport
         render template: options[:template]
       end
 
+      collection_action :template, method: :get do
+        respond_to do |format|
+          csv_template = CSV.generate do |csv|
+            csv << resource_class.column_names - %w[created_at updated_at].map do |attr|
+              resource_class.human_attribute_name(attr, default: attr.to_s.titleize)
+            end
+          end
+          format.csv do
+            send_data csv_template,
+                      filename: "#{resource_class}_template.csv",
+                      type: 'application/csv',
+                      disposition: 'inline'
+          end
+        end
+      end
+
       action_item :import, only: :index, if: options[:if] do
         if authorized?(ActiveAdminImport::Auth::IMPORT, active_admin_config.resource_class)
-          link_to(
-            I18n.t('active_admin_import.import_model', plural_model: options[:plural_resource_label]),
-            action: :import
-          )
+          span do
+            link_to(
+              I18n.t('active_admin_import.import_model', plural_model: options[:plural_resource_label]),
+              action: :import
+            )
+          end
+          span do
+            link_to(
+              I18n.t('active_admin_import.template'),
+              action: :template,
+              format: :csv
+            )
+          end
         end
       end
 
