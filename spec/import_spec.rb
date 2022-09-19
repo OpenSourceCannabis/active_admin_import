@@ -371,6 +371,20 @@ describe 'import', type: :feature do
             end
           end
         end
+
+        context 'when zipped with Win1251 file' do
+          let(:options) do
+            attributes = { force_encoding: :auto }
+            { template_object: ActiveAdminImport::Model.new(attributes) }
+          end
+          it 'should import file' do
+            with_zipped_csv(:authors_win1251_win_endline) do
+              upload_file!(:authors_win1251_win_endline, :zip)
+              expect(page).to have_content 'Successfully imported 2 authors'
+              expect(Author.count).to eq(2)
+            end
+          end
+        end
       end
 
       context 'with different header attribute names' do
@@ -430,15 +444,40 @@ describe 'import', type: :feature do
         upload_file!(:authors)
         expect(Author.count).to eq(2)
       end
+
+      context 'when the option before_import raises a ActiveAdminImport::Exception' do
+        let(:options) { { before_import: ->(_) { raise ActiveAdminImport::Exception, 'error message' } } }
+
+        before { upload_file!(:authors) }
+
+        it 'should show error' do
+          expect(page).to have_content I18n.t('active_admin_import.file_error', message: 'error message')
+          expect(Author.count).to eq(0)
+        end
+      end
+
+      context 'when the option before_batch_import raises a ActiveAdminImport::Exception' do
+        let(:options) { { before_batch_import: ->(_) { raise ActiveAdminImport::Exception, 'error message' } } }
+
+        before { upload_file!(:authors) }
+
+        it 'should show error' do
+          expect(page).to have_content I18n.t('active_admin_import.file_error', message: 'error message')
+          expect(Author.count).to eq(0)
+        end
+      end
     end
   end
 
   context "with slice_columns option" do
+    let(:batch_size) { 2 }
+
     before do
       add_author_resource template_object: ActiveAdminImport::Model.new,
                           before_batch_import: lambda { |importer|
                             importer.batch_slice_columns(slice_columns)
-                          }
+                          },
+                          batch_size: batch_size
       visit "/admin/authors/import"
       upload_file!(:authors)
     end
@@ -446,13 +485,23 @@ describe 'import', type: :feature do
     context "slice last column and superfluous column" do
       let(:slice_columns) { %w(name last_name not_existing_column) }
 
-      it "should not fill `birthday` column" do
-        expect(Author.pluck(:name, :last_name, :birthday)).to match_array(
-          [
-            ["Jane", "Roe", nil],
-            ["John", "Doe", nil]
-          ]
-        )
+      shared_examples_for "birthday column removed" do
+        it "should not fill `birthday` column" do
+          expect(Author.pluck(:name, :last_name, :birthday)).to match_array(
+            [
+              ["Jane", "Roe", nil],
+              ["John", "Doe", nil]
+            ]
+          )
+        end
+      end
+
+      it_behaves_like "birthday column removed"
+
+      context "when doing more than one batch" do
+        let(:batch_size) { 1 }
+
+        it_behaves_like "birthday column removed"
       end
     end
 

@@ -37,7 +37,7 @@ module ActiveAdminImport
     end
 
     def cycle(lines)
-      @csv_lines = CSV.parse(lines.join, @csv_options)
+      @csv_lines = CSV.parse(lines.join, **@csv_options)
       import_result.add(batch_import, lines.count)
     end
 
@@ -70,7 +70,7 @@ module ActiveAdminImport
       end
     end
 
-    # Use it when CSV file contain redundant columns
+    # Use this method when CSV file contains unnecessary columns
     #
     # Example:
     #
@@ -81,16 +81,22 @@ module ActiveAdminImport
     # end
     #
     def batch_slice_columns(slice_columns)
-      use_indexes = []
-      headers.values.each_with_index do |val, index|
-        use_indexes << index if val.in?(slice_columns)
+      # Only set @use_indexes for the first batch so that @use_indexes are in correct
+      # position for subsequent batches
+      unless defined?(@use_indexes)
+        @use_indexes = []
+        headers.values.each_with_index do |val, index|
+          @use_indexes << index if val.in?(slice_columns)
+        end
+        return csv_lines if @use_indexes.empty?
+
+        # slice CSV headers
+        @headers = headers.to_a.values_at(*@use_indexes).to_h
       end
-      return csv_lines if use_indexes.empty?
-      # slice CSV headers
-      @headers = headers.to_a.values_at(*use_indexes).to_h
+
       # slice CSV values
       csv_lines.map! do |line|
-        line.values_at(*use_indexes)
+        line.values_at(*@use_indexes)
       end
     end
 
@@ -109,7 +115,7 @@ module ActiveAdminImport
       batch_size = options[:batch_size].to_i
       File.open(file.path) do |f|
         # capture headers if not exist
-        prepare_headers { CSV.parse(f.readline, @csv_options).first }
+        prepare_headers { CSV.parse(f.readline, **@csv_options).first }
         f.each_line do |line|
           lines << line if line.present?
           if lines.size == batch_size || f.eof?

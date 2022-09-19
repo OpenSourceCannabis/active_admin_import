@@ -21,6 +21,7 @@ module ActiveAdminImport
         application/csv
         application/vnd.ms-excel
         application/vnd.msexcel
+        application/octet-stream
         text/tsv
         text/x-tsv
         text/tab-separated-values
@@ -109,7 +110,7 @@ module ActiveAdminImport
 
     def unzip_file
       Zip::File.open(file_path) do |zip_file|
-        self.file = Tempfile.new(CONST::TMP_FILE)
+        self.file = Tempfile.new(CONST::TMP_FILE, binmode: true)
         data = zip_file.entries.select(&:file?).first.get_input_stream.read
         file << data
         file.close
